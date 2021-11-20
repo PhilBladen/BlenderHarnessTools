@@ -103,6 +103,19 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         t = v.dot(line_direction)
         P = line_point + t * line_direction
         return (point - P).magnitude
+    
+    # Functions derived using https://pages.mtu.edu/~shene/COURSES/cs3621/NOTES/spline/Bezier/bezier-der.html
+    # and Computer Graphics & Geometric Modelling by David Salomon
+    def interpolate_spline(self, p0, p1, p2, p3, u):
+        v = 1 - u
+        return v * v * v * p0 + 3 * u * v * v * p1 + 3 * v * u * u * p2 + u * u * u * p3
+    
+    def get_spline_curvature(self, p0, p1, p2, p3, u):
+        v = 1 - u
+        Pt = 3 * v * v * (p1 - p0) + 6 * u * v * (p2 - p1) + 3 * u * u * (p3 - p2)
+        Ptt = 6 * v * (p2 - 2 * p1 + p0) + 6 * u * (p3 - 2 * p2 + p1)
+        Pt_mag = Pt.magnitude
+        return Pt.cross(Ptt).cross(Pt).magnitude / (Pt_mag * Pt_mag * Pt_mag * Pt_mag)
 
     def get_plane_intersection(self, p1, n1, p2, n2):
         # vertices.append(p1)
@@ -138,16 +151,15 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
                 meshes.append(obj)
 
         vertices = []
-        if len(meshes) >= 2:
-            up_vector = Vector((0, 0, 1))
-            plane1 = meshes[0]
-            plane2 = meshes[1]
-            l1, r1, s1 = plane1.matrix_world.decompose()
-            l2, r2, s2 = plane2.matrix_world.decompose()
-            v, p = self.get_plane_intersection(l1, r1 @ up_vector, l2, r2 @ up_vector)
-
-            vertices.append(p)
-            vertices.append(p + v * 10)
+        # if len(meshes) >= 2:
+        #     up_vector = Vector((0, 0, 1))
+        #     plane1 = meshes[0]
+        #     plane2 = meshes[1]
+        #     l1, r1, s1 = plane1.matrix_world.decompose()
+        #     l2, r2, s2 = plane2.matrix_world.decompose()
+        #     v, p = self.get_plane_intersection(l1, r1 @ up_vector, l2, r2 @ up_vector)
+        #     vertices.append(p)
+        #     vertices.append(p + v * 10)
 
         # for m in meshes:
         #     normal = r @ normal
@@ -163,7 +175,7 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
             for spline in splines:
                 numSegments = len(spline.bezier_points)
 
-                r = spline.resolution_u + 1
+                r = spline.resolution_u
                 # if spline.use_cyclic_u:
                     # numSegments += 1
                     # print("Added one")
@@ -176,17 +188,30 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
                 for i in range(seg_range):
                     nextIdx = (i + 1) % numSegments
 
-                    knot1 = spline.bezier_points[i].co
-                    handle1 = spline.bezier_points[i].handle_right
-                    handle2 = spline.bezier_points[nextIdx].handle_left
-                    knot2 = spline.bezier_points[nextIdx].co
+                    knot1 = c.matrix_world @ spline.bezier_points[i].co
+                    handle1 = c.matrix_world @ spline.bezier_points[i].handle_right
+                    handle2 = c.matrix_world @ spline.bezier_points[nextIdx].handle_left
+                    knot2 = c.matrix_world @ spline.bezier_points[nextIdx].co
 
-                    _points = mathutils.geometry.interpolate_bezier(knot1, handle1, handle2, knot2, r)
-                    for _p in _points:
-                        p = Vector((_p[0], _p[1], _p[2]))
-                        p = c.matrix_world @ p
-                        points.append(p)
-                    # points.extend(_points)
+                    # _points = mathutils.geometry.interpolate_bezier(knot1, handle1, handle2, knot2, r)
+                    # for _p in _points:
+                    #     p = Vector((_p[0], _p[1], _p[2]))
+                    #     p = c.matrix_world @ p
+                    #     points.append(p)
+                    
+                    for i in range(r):
+                        u = i * (1 / r)
+                        #points.append(c.matrix_world @ self.interpolate_spline(knot1, handle1, handle2, knot2, u))
+
+                        p0 = self.interpolate_spline(knot1, handle1, handle2, knot2, u)
+                        p1 = self.interpolate_spline(knot1, handle1, handle2, knot2, u + (1 / r))
+
+                        curvature = self.get_spline_curvature(knot1, handle1, handle2, knot2, u)
+                        if curvature > 0:
+                            curve_radius = 1 / curvature
+                            if (curve_radius < .005):
+                                vertices.append(p0)
+                                vertices.append(p1)
 
                 assert('3D' == c.data.dimensions)
                 for point_index in range(len(points) - 2):
@@ -205,28 +230,26 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
 
                     # intersectionLineVector = v01.cross(v12)
 
-                    v, p = self.get_plane_intersection(p0, v01, p1, v12)
+                    # v, p = self.get_plane_intersection(p0, v01, p1, v12)
 
-                    curve_radius = self.line_to_point_distance(p1, v, p)
+                    # curve_radius = self.line_to_point_distance(p1, v, p)
 
-                    if (curve_radius < 5):
-                        vertices.append(p0)
-                        vertices.append(p1)
+                    # if (curve_radius < 5):
+                    #     vertices.append(p0)
+                    #     vertices.append(p1)
                     
-                    print("Curvature: {0}".format(curve_radius));
-
-                    # crudeCurvature = 
+                    # print("Curvature: {0}".format(curve_radius));
 
                     # print("Point X:", p0[0])
                     # print("Point Y:", p0[1])
                     # print("Point Z:", p0[2])
                     # print()
 
-                # for point_index in range(len(points) - 1):
-                #     p0 = points[point_index]
-                #     p1 = points[point_index + 1]
-                #     vertices.append((p0.x, p0.y, p0.z))
-                #     vertices.append((p1.x, p1.y, p1.z))
+                for point_index in range(len(points) - 1):
+                    p0 = points[point_index]
+                    p1 = points[point_index + 1]
+                    vertices.append((p0.x, p0.y, p0.z))
+                    vertices.append((p1.x, p1.y, p1.z))
 
         self.shader = gpu.shader.from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
