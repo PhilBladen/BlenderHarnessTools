@@ -78,139 +78,161 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
     #     self.unregsiter_handlers(context) # TODO hmm
     #     return {"FINISHED"}
 
+    def solveIntersectingPoint(self, zeroCoord, A, B, p1, p2):
+        a1 = p1.normal[A]
+        b1 = p1.normal[B]
+        d1 = p1.constant
+
+        a2 = p2.normal[A]
+        b2 = p2.normal[B]
+        d2 = p2.constant
+
+        A0 = ((b2 * d1) - (b1 * d2)) / ((a1 * b2 - a2 * b1))
+        B0 = ((a1 * d2) - (a2 * d1)) / ((a1 * b2 - a2 * b1))
+
+        point = Vector((0, 0, 0))
+        point[zeroCoord] = 0
+        point[A] = A0
+        point[B] = B0
+
+        return point
+    
+    # https://math.stackexchange.com/questions/1905533/find-perpendicular-distance-from-point-to-line-in-3d
+    def line_to_point_distance(self, point, line_direction, line_point):
+        v = point - line_point
+        t = v.dot(line_direction)
+        P = line_point + t * line_direction
+        return (point - P).magnitude
+
+    def get_plane_intersection(self, p1, n1, p2, n2):
+        # vertices.append(p1)
+        # vertices.append(p1 + n1)
+        # #
+        # vertices.append(p2)
+        # vertices.append(p2 + n2)
+
+        if n1.dot(n2) == 0: # Inline normals - no solution
+            return
+        
+        intersection_point = Vector((p1.dot(n1), p2.dot(n2), p1.x))
+        mat = mathutils.Matrix([(n1.x, n1.y, n1.z, 0), (n2.x, n2.y, n2.z, 0), (1, 0, 0, 0), (0, 0, 0, 1)])
+        mat.invert()
+        intersection_point = mat @ intersection_point
+        
+        intersection_vector = n1.cross(n2)
+        intersection_vector.normalize()
+
+        return intersection_vector, intersection_point
+        # curve_radius = self.line_to_point_distance(p1, intersection_vector, intersection_point)
+
+        # print("Curve radius: {0}".format(curve_radius / 2))
+
     def create_batch(self):
         objects = bpy.context.scene.objects
         curves = []
+        meshes = []
         for obj in objects:
-            if obj.type == "CURVE":
+            if obj.type == "CURVE":# and isinstance(obj.data, bpy.types.Curve):
                 curves.append(obj)
+            if obj.type == "MESH":
+                meshes.append(obj)
 
-        points = []
+        vertices = []
+        if len(meshes) >= 2:
+            up_vector = Vector((0, 0, 1))
+            plane1 = meshes[0]
+            plane2 = meshes[1]
+            l1, r1, s1 = plane1.matrix_world.decompose()
+            l2, r2, s2 = plane2.matrix_world.decompose()
+            v, p = self.get_plane_intersection(l1, r1 @ up_vector, l2, r2 @ up_vector)
+
+            vertices.append(p)
+            vertices.append(p + v * 10)
+
+        # for m in meshes:
+        #     normal = r @ normal
+        #     normal.normalize()
+            
+        #     vertices.append(m.location)
+        #     vertices.append(m.location + normal)
+
         for c in curves:    
-            c.select_set(True)
+            # c.select_set(True)
             d = c.data
             splines = d.splines
-            spline = splines[0]
-            numSegments = len(spline.bezier_points)
+            for spline in splines:
+                numSegments = len(spline.bezier_points)
 
-            r = spline.resolution_u
-            # if spline.use_cyclic_u:
-                # numSegments += 1
+                r = spline.resolution_u + 1
+                # if spline.use_cyclic_u:
+                    # numSegments += 1
+                    # print("Added one")
 
-            for i in range(numSegments - 1):
-                nextIdx = (i + 1) % numSegments
+                seg_range = numSegments - 1
+                if spline.use_cyclic_u:
+                    seg_range += 1
 
-                knot1 = spline.bezier_points[i].co
-                handle1 = spline.bezier_points[i].handle_right
-                handle2 = spline.bezier_points[nextIdx].handle_left
-                knot2 = spline.bezier_points[nextIdx].co
+                points = []
+                for i in range(seg_range):
+                    nextIdx = (i + 1) % numSegments
 
-                _points = mathutils.geometry.interpolate_bezier(knot1, handle1, handle2, knot2, r)
-                for _p in _points:
-                    p = Vector((_p[0], _p[1], _p[2]))
-                    p = c.matrix_world @ p
-                    points.append(p)
-                # points.extend(_points)
+                    knot1 = spline.bezier_points[i].co
+                    handle1 = spline.bezier_points[i].handle_right
+                    handle2 = spline.bezier_points[nextIdx].handle_left
+                    knot2 = spline.bezier_points[nextIdx].co
 
-            assert('3D' == c.data.dimensions)
-            for pointIndex in range(len(points) - 2):
-                p0 = points[pointIndex]
-                p1 = points[pointIndex + 1]
-                p2 = points[pointIndex + 2]
+                    _points = mathutils.geometry.interpolate_bezier(knot1, handle1, handle2, knot2, r)
+                    for _p in _points:
+                        p = Vector((_p[0], _p[1], _p[2]))
+                        p = c.matrix_world @ p
+                        points.append(p)
+                    # points.extend(_points)
 
-                # v01 = Vector3D(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
-                # v12 = Vector3D(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
+                assert('3D' == c.data.dimensions)
+                for point_index in range(len(points) - 2):
+                    p0 = points[point_index]
+                    p1 = points[point_index + 1]
+                    p2 = points[point_index + 2]
 
-                v01 = p1 - p0
-                v12 = p2 - p1
+                    # v01 = Vector3D(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
+                    # v12 = Vector3D(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
 
+                    v01 = p1 - p0
+                    v12 = p2 - p1
 
-                
-                print("Curvature: {0}".format(v12 - v01));
+                    v01.normalize()
+                    v12.normalize()
 
-                # crudeCurvature = 
+                    # intersectionLineVector = v01.cross(v12)
 
-                # print("Point X:", p0[0])
-                # print("Point Y:", p0[1])
-                # print("Point Z:", p0[2])
-                # print()
+                    v, p = self.get_plane_intersection(p0, v01, p1, v12)
 
-        vertices = []#[(0, 3, 3), (0, 4, 4), (0, 6, 2), (0, 3, 3)]
-        for p in points:
-            vertices.append((p.x, p.y, p.z))
+                    curve_radius = self.line_to_point_distance(p1, v, p)
+
+                    if (curve_radius < 5):
+                        vertices.append(p0)
+                        vertices.append(p1)
+                    
+                    print("Curvature: {0}".format(curve_radius));
+
+                    # crudeCurvature = 
+
+                    # print("Point X:", p0[0])
+                    # print("Point Y:", p0[1])
+                    # print("Point Z:", p0[2])
+                    # print()
+
+                # for point_index in range(len(points) - 1):
+                #     p0 = points[point_index]
+                #     p1 = points[point_index + 1]
+                #     vertices.append((p0.x, p0.y, p0.z))
+                #     vertices.append((p1.x, p1.y, p1.z))
+
         self.shader = gpu.shader.from_builtin("3D_UNIFORM_COLOR")
-        self.batch = batch_for_shader(self.shader, "LINE_STRIP", {"pos": vertices})
+        self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
     
     def draw_callback(self, op, context):
-        bgl.glLineWidth(5)
+        # bgl.glLineWidth(5)
         self.shader.bind()
         self.shader.uniform_float("color", (1, 0, 0, 1))
         self.batch.draw(self.shader)
-
-    # def execute(self, context):
-    #     objects = bpy.context.scene.objects
-
-    #     curves = []
-    #     for obj in objects:
-    #         if obj.type == "CURVE":
-    #             curves.append(obj)
-
-    #     for c in curves:    
-    #         c.select_set(True)
-    #         d = c.data
-    #         splines = d.splines
-    #         spline = splines[0]
-    #         numSegments = len(spline.bezier_points)
-
-    #         r = spline.resolution_u
-    #         if spline.use_cyclic_u:
-    #             numSegments += 1
-
-    #         points = []
-    #         for i in range(numSegments):
-    #             nextIdx = (i + 1) % numSegments
-
-    #             knot1 = spline.bezier_points[i].co
-    #             handle1 = spline.bezier_points[i].handle_right
-    #             handle2 = spline.bezier_points[nextIdx].handle_left
-    #             knot2 = spline.bezier_points[nextIdx].co
-
-    #             _points = mathutils.geometry.interpolate_bezier(knot1, handle1, handle2, knot2, r)
-    #             for p in _points:
-    #                 points.append(Vector3D(p[0], p[1], p[2]))
-    #             # points.extend(_points)
-
-    #         assert('3D' == c.data.dimensions)
-    #         for pointIndex in range(len(points) - 2):
-    #             p0 = points[pointIndex]
-    #             p1 = points[pointIndex + 1]
-    #             p2 = points[pointIndex + 2]
-
-    #             # v01 = Vector3D(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
-    #             # v12 = Vector3D(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
-
-    #             v01 = p1 - p0
-    #             v12 = p2 - p1
-
-
-                
-    #             print("Curvature: {0}".format(v12 - v01));
-
-    #             # crudeCurvature = 
-
-    #             # print("Point X:", p0[0])
-    #             # print("Point Y:", p0[1])
-    #             # print("Point Z:", p0[2])
-    #             # print()
-
-    #         splineCount = 0
-    #         pointCount = 0
-    #         for s in splines:
-    #             splineCount += 1
-    #             for p in s.points:
-    #                 pointCount += 1
-    #         pass
-
-
-        
-    #     return {'FINISHED'}
