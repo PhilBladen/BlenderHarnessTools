@@ -107,15 +107,26 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
     # Functions derived using https://pages.mtu.edu/~shene/COURSES/cs3621/NOTES/spline/Bezier/bezier-der.html
     # and Computer Graphics & Geometric Modelling by David Salomon
     def interpolate_spline(self, p0, p1, p2, p3, u):
-        v = 1 - u
-        return v * v * v * p0 + 3 * u * v * v * p1 + 3 * v * u * u * p2 + u * u * u * p3
+        v = 1. - u
+        return v * v * v * p0 + 3. * u * v * v * p1 + 3. * v * u * u * p2 + u * u * u * p3
     
     def get_spline_curvature(self, p0, p1, p2, p3, u):
-        v = 1 - u
-        Pt = 3 * v * v * (p1 - p0) + 6 * u * v * (p2 - p1) + 3 * u * u * (p3 - p2)
-        Ptt = 6 * v * (p2 - 2 * p1 + p0) + 6 * u * (p3 - 2 * p2 + p1)
-        Pt_mag = Pt.magnitude
-        return Pt.cross(Ptt).cross(Pt).magnitude / (Pt_mag * Pt_mag * Pt_mag * Pt_mag)
+        a = -p0 + 3 * p1 - 3 * p2 + p3
+        b = 3 * p0 - 6 * p1 + 3 * p2
+        c = -3 * p0 + 3 * p1
+        d = p0
+        Pu = 3 * a * u * u + 2 * b * u + c
+        Puu = 6 * a * u + 2 * b
+        Pu_mag = Pu.magnitude
+        k = (Pu.cross(Puu) / (Pu_mag * Pu_mag * Pu_mag)).magnitude
+
+        # v = 1. - u
+        # Pt = 3. * v * v * (p1 - p0) + 6. * u * v * (p2 - p1) + 3. * u * u * (p3 - p2)
+        # Ptt = 6. * v * (p2 - 2 * p1 + p0) + 6. * u * (p3 - 2. * p2 + p1)
+        # Pt_mag = Pt.magnitude
+        # k = Pt.cross(Ptt).cross(Pt).magnitude / (Pt_mag * Pt_mag * Pt_mag * Pt_mag)
+        # print(k)
+        return k
 
     def get_plane_intersection(self, p1, n1, p2, n2):
         # vertices.append(p1)
@@ -170,6 +181,9 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
 
         for c in curves:    
             # c.select_set(True)
+            if not "Minimum curvature" in c:
+                c["Minimum curvature"] = 0.005
+
             d = c.data
             splines = d.splines
             for spline in splines:
@@ -188,28 +202,22 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
                 for i in range(seg_range):
                     nextIdx = (i + 1) % numSegments
 
-                    knot1 = c.matrix_world @ spline.bezier_points[i].co
+                    anchor1 = c.matrix_world @ spline.bezier_points[i].co
                     handle1 = c.matrix_world @ spline.bezier_points[i].handle_right
                     handle2 = c.matrix_world @ spline.bezier_points[nextIdx].handle_left
-                    knot2 = c.matrix_world @ spline.bezier_points[nextIdx].co
-
-                    # _points = mathutils.geometry.interpolate_bezier(knot1, handle1, handle2, knot2, r)
-                    # for _p in _points:
-                    #     p = Vector((_p[0], _p[1], _p[2]))
-                    #     p = c.matrix_world @ p
-                    #     points.append(p)
+                    anchor2 = c.matrix_world @ spline.bezier_points[nextIdx].co
                     
                     for i in range(r):
                         u = i * (1 / r)
                         #points.append(c.matrix_world @ self.interpolate_spline(knot1, handle1, handle2, knot2, u))
 
-                        p0 = self.interpolate_spline(knot1, handle1, handle2, knot2, u)
-                        p1 = self.interpolate_spline(knot1, handle1, handle2, knot2, u + (1 / r))
+                        p0 = self.interpolate_spline(anchor1, handle1, handle2, anchor2, u)
+                        p1 = self.interpolate_spline(anchor1, handle1, handle2, anchor2, u + (1 / r))
 
-                        curvature = self.get_spline_curvature(knot1, handle1, handle2, knot2, u)
+                        curvature = self.get_spline_curvature(anchor1, handle1, handle2, anchor2, u)
                         if curvature > 0:
                             curve_radius = 1 / curvature
-                            if (curve_radius < .005):
+                            if (curve_radius < c["Minimum curvature"]): # TODO add variable curvature allowance
                                 vertices.append(p0)
                                 vertices.append(p1)
 
