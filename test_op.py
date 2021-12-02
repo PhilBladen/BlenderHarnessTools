@@ -1,3 +1,4 @@
+from typing import ContextManager
 import bpy
 import bgl
 import mathutils.geometry
@@ -56,9 +57,9 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
     bl_idname = "object.test_ot_selectcurves"
     bl_label = "Test_OT_SelectCurves"
 
+    draw_handlers = []
+
     def __init__(self):
-        self.draw_handle = None
-        self.draw_event = None
         print("Created Test_OT_SelectCurvesOperator instance") # TODO remove
 
     def invoke(self, context, event):
@@ -72,29 +73,31 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         return {"RUNNING_MODAL"}
     
     def register_handlers(self, args, context):
-        self.draw_handle = bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW")
-        self.draw_event = context.window_manager.event_timer_add(0.1, window=context.window) # TODO hmm
+        # self.draw_handle = bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW")
+        # self.draw_event = context.window_manager.event_timer_add(0.1, window=context.window) # TODO hmm
+        self.draw_handlers.append(bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW"))
     
-    def unregsiter_handlers(self, context):
-        context.window_manager.event_timer_remove(self.draw_event)
-        self.draw_event = None
-        
-        bpy.types.SpaceView3D.draw_handler_remove(self.draw_handle, "WINDOW")
-        self.draw_handle = None
+    @classmethod
+    def unregsiter_handlers(cls):
+        for handler in cls.draw_handlers:
+            try:
+                bpy.types.SpaceView3D.draw_handler_remove(handler, 'WINDOW')
+            except:
+                pass
+        for handler in cls.draw_handlers:
+            cls.draw_handlers.remove(handler)
 
     def modal(self, context, event):
         if context.area:
             context.area.tag_redraw()
         
+        print("Event: {0}".format(event))
+        
         if event.type in {"ESC"}:
-            self.unregsiter_handlers(context)
+            self.unregsiter_handlers()
             return {"CANCELLED"}
         
         return {"PASS_THROUGH"}
-    
-    def finish(self, context):
-        self.unregsiter_handlers(context)
-        return {"FINISHED"}
 
     def create_batch(self):
         objects = bpy.context.scene.objects
@@ -107,22 +110,6 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
                 meshes.append(obj)
 
         vertices = []
-        # if len(meshes) >= 2:
-        #     up_vector = Vector((0, 0, 1))
-        #     plane1 = meshes[0]
-        #     plane2 = meshes[1]
-        #     l1, r1, s1 = plane1.matrix_world.decompose()
-        #     l2, r2, s2 = plane2.matrix_world.decompose()
-        #     v, p = self.get_plane_intersection(l1, r1 @ up_vector, l2, r2 @ up_vector)
-        #     vertices.append(p)
-        #     vertices.append(p + v * 10)
-
-        # for m in meshes:
-        #     normal = r @ normal
-        #     normal.normalize()
-            
-        #     vertices.append(m.location)
-        #     vertices.append(m.location + normal)
 
         calculation_start_time_ms = current_milli_time()
 
@@ -177,6 +164,12 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         self.shader = gpu.shader.from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
 
+    # TODO temporary
+    @classmethod
+    def poll(cls, context: bpy.context):
+        return (context.active_object is not None and
+                context.active_object.select_get() and
+                context.active_object.type == 'CURVE')
     
     def draw_callback(self, op, context):
         # bgl.glLineWidth(5)

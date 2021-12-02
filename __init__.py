@@ -41,7 +41,6 @@ def register():
         bpy.utils.register_class(c)
 
 def unregister():
-    
+    Test_OT_SelectCurvesOperator.unregsiter_handlers()
     for c in classes:
         bpy.utils.unregister_class(c)
-    print("Unregistering")
