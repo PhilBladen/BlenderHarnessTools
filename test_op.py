@@ -5,27 +5,6 @@ from mathutils import Vector
 import gpu
 from gpu_extras.batch import batch_for_shader
 
-class Vector3D:
-    def __init__(self, x = 0, y = 0, z = 0):
-        self.x = x
-        self.y = y
-        self.z = z
-    
-    def __add__(self, other):
-        x = self.x + other.x
-        y = self.y + other.y
-        z = self.z + other.z
-        return Vector3D(x, y, z)
-
-    def __sub__(self, other):
-        x = self.x - other.x
-        y = self.y - other.y
-        z = self.z - other.z
-        return Vector3D(x, y, z)
-    
-    def __str__(self):
-        return "Vector ({0}, {1}, {2})".format(self.x, self.y, self.z)
-
 class Test_OT_Operator(bpy.types.Operator):
     bl_idname = "view3d.cursor_center"
     bl_label = "Simple operator"
@@ -74,9 +53,9 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         
         return {"PASS_THROUGH"}
     
-    # def finish(self):
-    #     self.unregsiter_handlers(context) # TODO hmm
-    #     return {"FINISHED"}
+    def finish(self, context):
+        self.unregsiter_handlers(context)
+        return {"FINISHED"}
 
     def solveIntersectingPoint(self, zeroCoord, A, B, p1, p2):
         a1 = p1.normal[A]
