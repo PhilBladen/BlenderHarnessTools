@@ -5,6 +5,44 @@ from mathutils import Vector
 import gpu
 from gpu_extras.batch import batch_for_shader
 
+import math
+import time
+
+def current_milli_time():
+    return round(time.time() * 1000)
+
+class SplineDefinition:
+    # See https://www.geeksforgeeks.org/cubic-bezier-curve-implementation-in-c/ for point definition
+    # a, b, c and d are the coefficients of the cubic polynomial: P(u)=au^3+bu^2+cu+d
+    def __init__(self, p0: Vector, p1: Vector, p2: Vector, p3: Vector) -> None:
+        self.p0 = p0
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.a = -p0 + 3 * p1 - 3 * p2 + p3
+        self.b = 3 * p0 - 6 * p1 + 3 * p2
+        self.c = -3 * p0 + 3 * p1
+        self.d = p0
+    
+    # From https://www.geeksforgeeks.org/cubic-bezier-curve-implementation-in-c/
+    def interpolate(self, u: float) -> Vector:
+        v = 1 - u
+        return v * v * v * self.p0 + 3 * u * v * v * self.p1 + 3 * v * u * u * self.p2 + u * u * u * self.p3
+    
+    # Curvature equation from Computer Graphics & Geometric Modelling by David Salomon
+    def get_curvature(self, u: float) -> float:
+        Pu = 3 * self.a * u * u + 2 * self.b * u + self.c # First derivative
+        Puu = 6 * self.a * u + 2 * self.b # Second derivative
+        Pu_mag = Pu.magnitude
+        kappa = (Pu.cross(Puu) / (Pu_mag * Pu_mag * Pu_mag)).magnitude
+        return kappa
+    
+    def get_bend_radius(self, u: float) -> float:
+        kappa = self.get_curvature(u)
+        if kappa == 0:
+            return math.inf
+        return 1 / kappa
+
 class Test_OT_Operator(bpy.types.Operator):
     bl_idname = "view3d.cursor_center"
     bl_label = "Simple operator"
@@ -21,6 +59,7 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
     def __init__(self):
         self.draw_handle = None
         self.draw_event = None
+        print("Created Test_OT_SelectCurvesOperator instance") # TODO remove
 
     def invoke(self, context, event):
         self.create_batch()
@@ -57,79 +96,6 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         self.unregsiter_handlers(context)
         return {"FINISHED"}
 
-    def solveIntersectingPoint(self, zeroCoord, A, B, p1, p2):
-        a1 = p1.normal[A]
-        b1 = p1.normal[B]
-        d1 = p1.constant
-
-        a2 = p2.normal[A]
-        b2 = p2.normal[B]
-        d2 = p2.constant
-
-        A0 = ((b2 * d1) - (b1 * d2)) / ((a1 * b2 - a2 * b1))
-        B0 = ((a1 * d2) - (a2 * d1)) / ((a1 * b2 - a2 * b1))
-
-        point = Vector((0, 0, 0))
-        point[zeroCoord] = 0
-        point[A] = A0
-        point[B] = B0
-
-        return point
-    
-    # https://math.stackexchange.com/questions/1905533/find-perpendicular-distance-from-point-to-line-in-3d
-    def line_to_point_distance(self, point, line_direction, line_point):
-        v = point - line_point
-        t = v.dot(line_direction)
-        P = line_point + t * line_direction
-        return (point - P).magnitude
-    
-    # Functions derived using https://pages.mtu.edu/~shene/COURSES/cs3621/NOTES/spline/Bezier/bezier-der.html
-    # and Computer Graphics & Geometric Modelling by David Salomon
-    def interpolate_spline(self, p0, p1, p2, p3, u):
-        v = 1. - u
-        return v * v * v * p0 + 3. * u * v * v * p1 + 3. * v * u * u * p2 + u * u * u * p3
-    
-    def get_spline_curvature(self, p0, p1, p2, p3, u):
-        a = -p0 + 3 * p1 - 3 * p2 + p3
-        b = 3 * p0 - 6 * p1 + 3 * p2
-        c = -3 * p0 + 3 * p1
-        d = p0
-        Pu = 3 * a * u * u + 2 * b * u + c
-        Puu = 6 * a * u + 2 * b
-        Pu_mag = Pu.magnitude
-        k = (Pu.cross(Puu) / (Pu_mag * Pu_mag * Pu_mag)).magnitude
-
-        # v = 1. - u
-        # Pt = 3. * v * v * (p1 - p0) + 6. * u * v * (p2 - p1) + 3. * u * u * (p3 - p2)
-        # Ptt = 6. * v * (p2 - 2 * p1 + p0) + 6. * u * (p3 - 2. * p2 + p1)
-        # Pt_mag = Pt.magnitude
-        # k = Pt.cross(Ptt).cross(Pt).magnitude / (Pt_mag * Pt_mag * Pt_mag * Pt_mag)
-        # print(k)
-        return k
-
-    def get_plane_intersection(self, p1, n1, p2, n2):
-        # vertices.append(p1)
-        # vertices.append(p1 + n1)
-        # #
-        # vertices.append(p2)
-        # vertices.append(p2 + n2)
-
-        if n1.dot(n2) == 0: # Inline normals - no solution
-            return
-        
-        intersection_point = Vector((p1.dot(n1), p2.dot(n2), p1.x))
-        mat = mathutils.Matrix([(n1.x, n1.y, n1.z, 0), (n2.x, n2.y, n2.z, 0), (1, 0, 0, 0), (0, 0, 0, 1)])
-        mat.invert()
-        intersection_point = mat @ intersection_point
-        
-        intersection_vector = n1.cross(n2)
-        intersection_vector.normalize()
-
-        return intersection_vector, intersection_point
-        # curve_radius = self.line_to_point_distance(p1, intersection_vector, intersection_point)
-
-        # print("Curve radius: {0}".format(curve_radius / 2))
-
     def create_batch(self):
         objects = bpy.context.scene.objects
         curves = []
@@ -158,88 +124,59 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         #     vertices.append(m.location)
         #     vertices.append(m.location + normal)
 
+        calculation_start_time_ms = current_milli_time()
+
         for c in curves:    
             # c.select_set(True)
             if not "Minimum curvature" in c:
                 c["Minimum curvature"] = 0.005
 
             d = c.data
-            splines = d.splines
-            for spline in splines:
-                numSegments = len(spline.bezier_points)
+            curve_elements = d.splines
+            for curve_element in curve_elements:
+                numSegments = len(curve_element.bezier_points)
 
-                r = spline.resolution_u
+                r = curve_element.resolution_u
                 # if spline.use_cyclic_u:
                     # numSegments += 1
                     # print("Added one")
 
                 seg_range = numSegments - 1
-                if spline.use_cyclic_u:
+                if curve_element.use_cyclic_u:
                     seg_range += 1
 
                 points = []
-                for i in range(seg_range):
-                    nextIdx = (i + 1) % numSegments
+                for index in range(seg_range):
+                    next_index = (index + 1) % numSegments
 
-                    anchor1 = c.matrix_world @ spline.bezier_points[i].co
-                    handle1 = c.matrix_world @ spline.bezier_points[i].handle_right
-                    handle2 = c.matrix_world @ spline.bezier_points[nextIdx].handle_left
-                    anchor2 = c.matrix_world @ spline.bezier_points[nextIdx].co
+                    anchor1 = c.matrix_world @ curve_element.bezier_points[index].co
+                    handle1 = c.matrix_world @ curve_element.bezier_points[index].handle_right
+                    handle2 = c.matrix_world @ curve_element.bezier_points[next_index].handle_left
+                    anchor2 = c.matrix_world @ curve_element.bezier_points[next_index].co
+                    spline = SplineDefinition(anchor1, handle1, handle2, anchor2)
                     
-                    for i in range(r):
-                        u = i * (1 / r)
-                        #points.append(c.matrix_world @ self.interpolate_spline(knot1, handle1, handle2, knot2, u))
+                    # TODO properly center line segment on curvature sample point
 
-                        p0 = self.interpolate_spline(anchor1, handle1, handle2, anchor2, u)
-                        p1 = self.interpolate_spline(anchor1, handle1, handle2, anchor2, u + (1 / r))
+                    for index in range(r):
+                        u = index * (1 / r)
+                        p0 = spline.interpolate(u)
+                        p1 = spline.interpolate(u + (1 / r))
+                        bend_radius = spline.get_bend_radius(u + (1 / (2 * r))) # Sample centerpoint between p0 and p1
+                        if (bend_radius < c["Minimum curvature"]): # TODO add variable curvature allowance
+                            vertices.append(p0)
+                            vertices.append(p1)
 
-                        curvature = self.get_spline_curvature(anchor1, handle1, handle2, anchor2, u)
-                        if curvature > 0:
-                            curve_radius = 1 / curvature
-                            if (curve_radius < c["Minimum curvature"]): # TODO add variable curvature allowance
-                                vertices.append(p0)
-                                vertices.append(p1)
-
-                assert('3D' == c.data.dimensions)
-                for point_index in range(len(points) - 2):
-                    p0 = points[point_index]
-                    p1 = points[point_index + 1]
-                    p2 = points[point_index + 2]
-
-                    # v01 = Vector3D(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
-                    # v12 = Vector3D(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
-
-                    v01 = p1 - p0
-                    v12 = p2 - p1
-
-                    v01.normalize()
-                    v12.normalize()
-
-                    # intersectionLineVector = v01.cross(v12)
-
-                    # v, p = self.get_plane_intersection(p0, v01, p1, v12)
-
-                    # curve_radius = self.line_to_point_distance(p1, v, p)
-
-                    # if (curve_radius < 5):
-                    #     vertices.append(p0)
-                    #     vertices.append(p1)
-                    
-                    # print("Curvature: {0}".format(curve_radius));
-
-                    # print("Point X:", p0[0])
-                    # print("Point Y:", p0[1])
-                    # print("Point Z:", p0[2])
-                    # print()
-
+                assert('3D' == c.data.dimensions) # TODO understand
                 for point_index in range(len(points) - 1):
                     p0 = points[point_index]
                     p1 = points[point_index + 1]
                     vertices.append((p0.x, p0.y, p0.z))
                     vertices.append((p1.x, p1.y, p1.z))
 
+        print("Calculation time: {0}ms".format(current_milli_time() - calculation_start_time_ms))
         self.shader = gpu.shader.from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
+
     
     def draw_callback(self, op, context):
         # bgl.glLineWidth(5)
