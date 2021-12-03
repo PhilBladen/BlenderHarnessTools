@@ -4,16 +4,21 @@ class Test_PT_Panel(bpy.types.Panel):
     bl_idname = "Test_PT_Panel"
     bl_label = "Harness Tools"
     bl_category = "STAR-XL"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
+    bl_space_type = "PROPERTIES"#"VIEW_3D"
+    bl_region_type = "WINDOW"#"UI"
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context: bpy.context):
+        return context.active_object.type == "CURVE"
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False  # No animation.
 
-        row = layout.row()
-        row.operator("view3d.cursor_center", text="Center 3D cursor")
+        # row = layout.row()
+        # row.operator("view3d.cursor_center", text="Center 3D cursor")
 
         # row = layout.row(align=True)
         # row.prop(context.scene.harnesstools, "enabled", expand=True)
@@ -30,6 +35,10 @@ class Test_PT_Panel(bpy.types.Panel):
 
         row = layout.row()
         row.prop(context.scene.harnesstools, "line_width")
+
+        row = layout.row()
+        row.operator("object.set_cable_diameter")
+        row.prop(context.scene.harnesstools, "cable_diameter", text="")
 
         
 

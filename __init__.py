@@ -44,8 +44,11 @@ from bpy.props import (
         PointerProperty
         )
 
-from . test_op import Test_OT_Operator
-from . test_op import ValidateCableBendRadii
+from . operators import (
+    Test_OT_Operator,
+    SetCableDiameter,
+    ValidateCableBendRadii
+)
 from . test_panel import Test_PT_Panel
 
 class HarnessPropertyGroup(PropertyGroup):
@@ -70,11 +73,20 @@ class HarnessPropertyGroup(PropertyGroup):
         min = 1,
         max = 10
     )
+    cable_diameter: FloatProperty(
+        name = "Diameter",
+        default = 0.002,
+        min = 0,
+        soft_max = 0.01,
+        step=0.0001,
+        unit="LENGTH"
+    )
 
 classes = (
     Test_OT_Operator,
     Test_PT_Panel,
     ValidateCableBendRadii,
+    SetCableDiameter,
     HarnessPropertyGroup
     )
 

@@ -58,10 +58,34 @@ class Test_OT_Operator(bpy.types.Operator):
     bl_idname = "view3d.cursor_center"
     bl_label = "Simple operator"
     bl_description = "Center 3D cursor"
+    bl_options = {'REGISTER', 'UNDO'}
     
     def execute(self, context):
         bpy.ops.view3d.snap_cursor_to_center()
         return {'FINISHED'}
+
+class SetCableDiameter(bpy.types.Operator):
+    bl_idname = "object.set_cable_diameter"
+    bl_label = "Set Diameter"
+    
+    def invoke(self, context: bpy.context, event):
+        active_object = context.active_object
+        assert active_object.type == "CURVE"
+        curve = active_object.data
+        assert isinstance(curve, bpy.types.Curve)
+        
+        curve.bevel_depth = context.scene.harnesstools.cable_diameter / 2
+        splines: List[bpy.types.Spline] = curve.splines
+        for spline in splines:
+            bezier_points: List[bpy.types.BezierSplinePoint] = spline.bezier_points
+            for point in bezier_points:
+                point.radius = 1
+            # [0].radius = 1
+            # spline.bezier_points[3].radius = 1
+        
+
+
+        return {"FINISHED"}
 
 class ValidateCableBendRadii(bpy.types.Operator):
     bl_idname = "object.test_ot_selectcurves"
@@ -75,7 +99,7 @@ class ValidateCableBendRadii(bpy.types.Operator):
         pass
 
     def invoke(self, context, event):
-        self.create_batch()
+        self.prepare_batch()
 
         args = (self, context)
         self.register_handlers(args, context)
@@ -88,6 +112,8 @@ class ValidateCableBendRadii(bpy.types.Operator):
         # self.draw_handle = bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW")
         # self.draw_event = context.window_manager.event_timer_add(0.1, window=context.window) # TODO hmm
         self.draw_handlers.append(bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW"))
+
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
     
     @classmethod
     def unregsiter_handlers(cls):
@@ -98,10 +124,18 @@ class ValidateCableBendRadii(bpy.types.Operator):
                 pass
         for handler in cls.draw_handlers:
             cls.draw_handlers.remove(handler)
+        
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
     def modal(self, context, event):
-        if context.area:
-            context.area.tag_redraw()
+        # if context.area:
+        # bpy.types.SpaceView3D.context.area.tag_redraw()
+        # bpy.data.scenes[0].update_tag()#update()
+        # bpy.types.Scene.tag
+        
+        # bpy.context.view_layer.update()
+        # bpy.context.view_layer.depsgraph.tag
+        # print("Did update")
         
         # print("Event: {0}".format(event))
         
@@ -111,11 +145,13 @@ class ValidateCableBendRadii(bpy.types.Operator):
         
         return {"PASS_THROUGH"}
 
-    def create_batch(self):
-        objects = bpy.context.scene.objects
+    def prepare_batch(self):
+        objects: List[bpy.types.Object] = bpy.context.scene.objects
         curves: List[bpy.types.Object] = []
         meshes = []
         for obj in objects:
+            if not obj.visible_get():
+                continue
             if obj.type == "CURVE":# and isinstance(obj.data, bpy.types.Curve):
                 curves.append(obj)
             if obj.type == "MESH":
@@ -161,8 +197,8 @@ class ValidateCableBendRadii(bpy.types.Operator):
 
                     u = 0
                     s = 1/r
-                    print(d.bevel_depth)
-                    min_allowed_curvature = c["Minimum curvature"]
+                    # print(d.bevel_depth)
+                    min_allowed_curvature = c["Minimum curvature"] + d.bevel_depth
                     for i in range(len(bezier_points) - 1):
                     # for p in bezier_points:
                         bend_radius = spline.get_bend_radius(u + s / 2) # Sample centerpoint between p0 and p1
@@ -208,7 +244,7 @@ class ValidateCableBendRadii(bpy.types.Operator):
                 context.active_object.type == 'CURVE')
     
     def draw_callback(self, op, context):
-        self.create_batch()
+        self.prepare_batch()
         bgl.glLineWidth(context.scene.harnesstools.line_width)
         self.shader.bind()
         c: FloatVectorProperty = context.scene.harnesstools.color
