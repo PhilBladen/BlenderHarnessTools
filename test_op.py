@@ -1,12 +1,13 @@
-from typing import ContextManager
+from typing import (ContextManager, List)
 import bpy
 import bgl
-import mathutils.geometry
+from mathutils.geometry import interpolate_bezier
 from mathutils import Vector
-import gpu
+from gpu.shader import from_builtin
 from gpu_extras.batch import batch_for_shader
+from bpy.props import FloatVectorProperty
 
-import math
+from math import inf
 import time
 
 def current_milli_time():
@@ -28,7 +29,16 @@ class SplineDefinition:
     # From https://www.geeksforgeeks.org/cubic-bezier-curve-implementation-in-c/
     def interpolate(self, u: float) -> Vector:
         v = 1 - u
-        return v * v * v * self.p0 + 3 * u * v * v * self.p1 + 3 * v * u * u * self.p2 + u * u * u * self.p3
+        u2 = u * u
+        v2 = v * v
+        a = v2 * v
+        b = 3 * u * v2
+        c = 3 * v * u2
+        d = u2 * u
+        return v2 * v * self.p0 + 3 * u * v2 * self.p1 + 3 * v * u2 * self.p2 + u2 * u * self.p3
+        return (a * self.p0.x + b * self.p1.x + c * self.p2.x + d * self.p3.x, 
+                a * self.p0.y + b * self.p1.y + c * self.p2.y + d * self.p3.y,
+                a * self.p0.z + b * self.p1.z + c * self.p2.z + d * self.p3.z)
     
     # Curvature equation from Computer Graphics & Geometric Modelling by David Salomon
     def get_curvature(self, u: float) -> float:
@@ -41,7 +51,7 @@ class SplineDefinition:
     def get_bend_radius(self, u: float) -> float:
         kappa = self.get_curvature(u)
         if kappa == 0:
-            return math.inf
+            return inf
         return 1 / kappa
 
 class Test_OT_Operator(bpy.types.Operator):
@@ -58,6 +68,8 @@ class ValidateCableBendRadii(bpy.types.Operator):
     bl_label = "Test_OT_SelectCurves"
 
     draw_handlers = []
+
+    average_calc_time = 0
 
     def __init__(self):
         pass
@@ -101,7 +113,7 @@ class ValidateCableBendRadii(bpy.types.Operator):
 
     def create_batch(self):
         objects = bpy.context.scene.objects
-        curves = []
+        curves: List[bpy.types.Object] = []
         meshes = []
         for obj in objects:
             if obj.type == "CURVE":# and isinstance(obj.data, bpy.types.Curve):
@@ -112,13 +124,15 @@ class ValidateCableBendRadii(bpy.types.Operator):
         vertices = []
 
         calculation_start_time_ms = current_milli_time()
+        num_calculations = 0
+        num_curve_segments = 0
 
-        for c in curves:    
+        for c in curves:
             # c.select_set(True)
             if not "Minimum curvature" in c:
                 c["Minimum curvature"] = 0.005
 
-            d = c.data
+            d: bpy.types.Curve = c.data
             curve_elements = d.splines
             for curve_element in curve_elements:
                 numSegments = len(curve_element.bezier_points)
@@ -141,27 +155,49 @@ class ValidateCableBendRadii(bpy.types.Operator):
                     handle2 = c.matrix_world @ curve_element.bezier_points[next_index].handle_left
                     anchor2 = c.matrix_world @ curve_element.bezier_points[next_index].co
                     spline = SplineDefinition(anchor1, handle1, handle2, anchor2)
+                    num_curve_segments += 1
+
+                    bezier_points = interpolate_bezier(anchor1, handle1, handle2, anchor2, r)
+
+                    u = 0
+                    s = 1/r
+                    print(d.bevel_depth)
+                    min_allowed_curvature = c["Minimum curvature"]
+                    for i in range(len(bezier_points) - 1):
+                    # for p in bezier_points:
+                        bend_radius = spline.get_bend_radius(u + s / 2) # Sample centerpoint between p0 and p1
+                        if (bend_radius < min_allowed_curvature): # TODO add variable curvature allowance
+                            vertices.append(bezier_points[i])
+                            vertices.append(bezier_points[i + 1])
+                        u += s
+                        num_calculations += 1
                     
                     # TODO properly center line segment on curvature sample point
 
-                    for index in range(r):
-                        u = index * (1 / r)
-                        p0 = spline.interpolate(u)
-                        p1 = spline.interpolate(u + (1 / r))
-                        bend_radius = spline.get_bend_radius(u + (1 / (2 * r))) # Sample centerpoint between p0 and p1
-                        if (bend_radius < c["Minimum curvature"]): # TODO add variable curvature allowance
-                            vertices.append(p0)
-                            vertices.append(p1)
+                    # for index in range(r):
+                    #     u = index * (1 / r)
+                    #     p0 = spline.interpolate(u)
+                    #     p1 = spline.interpolate(u + (1 / r))
+                    #     bend_radius = spline.get_bend_radius(u + (1 / (2 * r))) # Sample centerpoint between p0 and p1
+                    #     num_calculations += 1
+                    #     if (bend_radius < c["Minimum curvature"]): # TODO add variable curvature allowance
+                    #         vertices.append(p0)
+                    #         vertices.append(p1)
 
-                assert('3D' == c.data.dimensions) # TODO understand
-                for point_index in range(len(points) - 1):
-                    p0 = points[point_index]
-                    p1 = points[point_index + 1]
-                    vertices.append((p0.x, p0.y, p0.z))
-                    vertices.append((p1.x, p1.y, p1.z))
+                # assert('3D' == c.data.dimensions) # TODO understand
+                # for point_index in range(len(points) - 1):
+                #     p0 = points[point_index]
+                #     p1 = points[point_index + 1]
+                #     vertices.append((p0.x, p0.y, p0.z))
+                #     vertices.append((p1.x, p1.y, p1.z))
 
-        print("Calculation time: {0}ms".format(current_milli_time() - calculation_start_time_ms))
-        self.shader = gpu.shader.from_builtin("3D_UNIFORM_COLOR")
+        calc_time = current_milli_time() - calculation_start_time_ms
+        if (self.average_calc_time == 0):
+            self.average_calc_time = calc_time
+        else:
+            self.average_calc_time += (calc_time - self.average_calc_time) * 0.05
+        print("Completed {0} calculations for {2} segments in {1}ms (avg {3})".format(num_calculations, calc_time, num_curve_segments, self.average_calc_time))
+        self.shader = from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
 
     # TODO temporary
@@ -175,6 +211,7 @@ class ValidateCableBendRadii(bpy.types.Operator):
         self.create_batch()
         bgl.glLineWidth(context.scene.harnesstools.line_width)
         self.shader.bind()
-        c = context.scene.harnesstools.color
+        c: FloatVectorProperty = context.scene.harnesstools.color
+        # c[1] = 0
         self.shader.uniform_float("color", c)
         self.batch.draw(self.shader)
