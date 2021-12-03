@@ -53,14 +53,14 @@ class Test_OT_Operator(bpy.types.Operator):
         bpy.ops.view3d.snap_cursor_to_center()
         return {'FINISHED'}
 
-class Test_OT_SelectCurvesOperator(bpy.types.Operator):
+class ValidateCableBendRadii(bpy.types.Operator):
     bl_idname = "object.test_ot_selectcurves"
     bl_label = "Test_OT_SelectCurves"
 
     draw_handlers = []
 
     def __init__(self):
-        print("Created Test_OT_SelectCurvesOperator instance") # TODO remove
+        pass
 
     def invoke(self, context, event):
         self.create_batch()
@@ -91,7 +91,7 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
         if context.area:
             context.area.tag_redraw()
         
-        print("Event: {0}".format(event))
+        # print("Event: {0}".format(event))
         
         if event.type in {"ESC"}:
             self.unregsiter_handlers()
@@ -172,7 +172,9 @@ class Test_OT_SelectCurvesOperator(bpy.types.Operator):
                 context.active_object.type == 'CURVE')
     
     def draw_callback(self, op, context):
-        # bgl.glLineWidth(5)
+        self.create_batch()
+        bgl.glLineWidth(context.scene.harnesstools.line_width)
         self.shader.bind()
-        self.shader.uniform_float("color", (1, 0, 0, 1))
+        c = context.scene.harnesstools.color
+        self.shader.uniform_float("color", c)
         self.batch.draw(self.shader)
