@@ -1,11 +1,11 @@
-from typing import (ContextManager, List)
+from typing import (List)
 import bpy
 import bgl
 from mathutils.geometry import interpolate_bezier
 from mathutils import Vector
 from gpu.shader import from_builtin
 from gpu_extras.batch import batch_for_shader
-from bpy.props import FloatVectorProperty
+from bpy.props import (FloatVectorProperty, FloatProperty)
 
 from math import inf
 import time
@@ -74,7 +74,7 @@ class SetCableDiameter(bpy.types.Operator):
         curve = active_object.data
         assert isinstance(curve, bpy.types.Curve)
         
-        curve.bevel_depth = context.scene.harnesstools.cable_diameter / 2
+        curve.bevel_depth = context.scene.harnesstools.cable_diameter / 2000 # units mm
         splines: List[bpy.types.Spline] = curve.splines
         for spline in splines:
             bezier_points: List[bpy.types.BezierSplinePoint] = spline.bezier_points
@@ -87,7 +87,7 @@ class SetCableDiameter(bpy.types.Operator):
 
         return {"FINISHED"}
 
-class ValidateCableBendRadii(bpy.types.Operator):
+class ValidateCableBendRadii:#(bpy.types.Operator):
     bl_idname = "object.test_ot_selectcurves"
     bl_label = "Test_OT_SelectCurves"
 
@@ -164,10 +164,6 @@ class ValidateCableBendRadii(bpy.types.Operator):
         num_curve_segments = 0
 
         for c in curves:
-            # c.select_set(True)
-            if not "Minimum curvature" in c:
-                c["Minimum curvature"] = 0.005
-
             d: bpy.types.Curve = c.data
             curve_elements = d.splines
             for curve_element in curve_elements:
@@ -196,52 +192,31 @@ class ValidateCableBendRadii(bpy.types.Operator):
                     bezier_points = interpolate_bezier(anchor1, handle1, handle2, anchor2, r)
 
                     u = 0
-                    s = 1/r
-                    # print(d.bevel_depth)
-                    min_allowed_curvature = c["Minimum curvature"] + d.bevel_depth
+                    s = 1 / r
+                    min_allowed_curvature = d.minimum_curve_radius + d.bevel_depth
                     for i in range(len(bezier_points) - 1):
-                    # for p in bezier_points:
                         bend_radius = spline.get_bend_radius(u + s / 2) # Sample centerpoint between p0 and p1
-                        if (bend_radius < min_allowed_curvature): # TODO add variable curvature allowance
+                        if (bend_radius < min_allowed_curvature):
                             vertices.append(bezier_points[i])
                             vertices.append(bezier_points[i + 1])
                         u += s
                         num_calculations += 1
-                    
-                    # TODO properly center line segment on curvature sample point
-
-                    # for index in range(r):
-                    #     u = index * (1 / r)
-                    #     p0 = spline.interpolate(u)
-                    #     p1 = spline.interpolate(u + (1 / r))
-                    #     bend_radius = spline.get_bend_radius(u + (1 / (2 * r))) # Sample centerpoint between p0 and p1
-                    #     num_calculations += 1
-                    #     if (bend_radius < c["Minimum curvature"]): # TODO add variable curvature allowance
-                    #         vertices.append(p0)
-                    #         vertices.append(p1)
-
-                # assert('3D' == c.data.dimensions) # TODO understand
-                # for point_index in range(len(points) - 1):
-                #     p0 = points[point_index]
-                #     p1 = points[point_index + 1]
-                #     vertices.append((p0.x, p0.y, p0.z))
-                #     vertices.append((p1.x, p1.y, p1.z))
 
         calc_time = current_milli_time() - calculation_start_time_ms
         if (self.average_calc_time == 0):
             self.average_calc_time = calc_time
         else:
             self.average_calc_time += (calc_time - self.average_calc_time) * 0.05
-        print("Completed {0} calculations for {2} segments in {1}ms (avg {3})".format(num_calculations, calc_time, num_curve_segments, self.average_calc_time))
+        #print("Completed {0} calculations for {2} segments in {1}ms (avg {3})".format(num_calculations, calc_time, num_curve_segments, self.average_calc_time))
         self.shader = from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
 
-    # TODO temporary
-    @classmethod
-    def poll(cls, context: bpy.context):
-        return (context.active_object is not None and
-                context.active_object.select_get() and
-                context.active_object.type == 'CURVE')
+    # # TODO temporary
+    # @classmethod
+    # def poll(cls, context: bpy.context):
+    #     return (context.active_object is not None and
+    #             context.active_object.select_get() and
+    #             context.active_object.type == 'CURVE')
     
     def draw_callback(self, op, context):
         self.prepare_batch()

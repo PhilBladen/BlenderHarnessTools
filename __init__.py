@@ -51,17 +51,30 @@ from . operators import (
 )
 from . test_panel import Test_PT_Panel
 
+v = ValidateCableBendRadii()
+
+def check_enabled(self, context):
+    enabled = bpy.context.window_manager.harnesstoolsenabled == "EN"
+    if enabled:
+        args = (v, context)
+        v.register_handlers(args, context)
+    else:
+        v.unregsiter_handlers()
+
 class HarnessPropertyGroup(PropertyGroup):
-    custom_1: FloatProperty(name="My Float")
-    custom_2: IntProperty(name="My Int")
-    enabled: bpy.props.EnumProperty(
-        name="Validate",
-        description="Apply Data to attribute.",
-        items=[ ('EN', "Enabled", ""),
-                ('DI', "Disabled", "")])
+    # def get_enabled(self):
+    #     # if not hasattr(self, "boo"):
+    #         # self.boo = "random"
+    #         # return 1
+    #     return self["enabled"]
+
+    # def setter(self, value):
+    #     self["enabled"] = value
+
+
     color: FloatVectorProperty(
-        name="Colour",
-        default=(0.2, 0.9, 0.9, 1),
+        name="Line colour",
+        default=(1.0, 0.0, 0.0, 1),
         size=4,
         subtype="COLOR",
         min=0,
@@ -71,21 +84,26 @@ class HarnessPropertyGroup(PropertyGroup):
         name = "Line width",
         default = 1,
         min = 1,
-        max = 10
+        max = 10,
+        subtype="PIXEL"
     )
     cable_diameter: FloatProperty(
         name = "Diameter",
-        default = 0.002,
-        min = 0,
-        soft_max = 0.01,
-        step=0.0001,
-        unit="LENGTH"
+        # default = 0.002,
+        soft_min = 0.1,
+        # soft_max = 0.01,
+        # step=0.0001,
+        # unit="LENGTH",
+        subtype="DISTANCE_CAMERA"
     )
+
+    # def on_load(self):
+    #     print("ONLOAD")
 
 classes = (
     Test_OT_Operator,
     Test_PT_Panel,
-    ValidateCableBendRadii,
+    #ValidateCableBendRadii,
     SetCableDiameter,
     HarnessPropertyGroup
     )
@@ -94,8 +112,32 @@ def register():
     for c in classes:
         register_class(c)
     Scene.harnesstools = PointerProperty(type=HarnessPropertyGroup)
+    # bpy.context.scene.harnesstools.property_unset("enabled")
+
+    bpy.types.Curve.minimum_curve_radius = FloatProperty(
+        name = "Min. bend radius",
+        default = 0.01,
+        min = 0,
+        unit="LENGTH"
+    )
+
+    bpy.types.WindowManager.harnesstoolsenabled = EnumProperty(
+        name="Curvature check",
+        description="Automatic cable minimum bend radius validation",
+        items=[ ('EN', "Enabled", ""),
+                ('DI', "Disabled", "")],
+        # default="DI",
+        options={"SKIP_SAVE"},
+        update=check_enabled,
+        # get=get_enabled,
+        # set=setter,
+    )
+
+    # bpy.types.WindowManager.harnesstoolsenabled = None
 
 def unregister():
     ValidateCableBendRadii.unregsiter_handlers()
     for c in classes:
         unregister_class(c)
+    del bpy.types.WindowManager.harnesstoolsenabled
+    del bpy.types.Scene.harnesstools

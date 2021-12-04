@@ -12,7 +12,7 @@ class Test_PT_Panel(bpy.types.Panel):
     def poll(cls, context: bpy.context):
         return context.active_object.type == "CURVE"
 
-    def draw(self, context):
+    def draw(self, context: bpy.context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False  # No animation.
@@ -25,7 +25,17 @@ class Test_PT_Panel(bpy.types.Panel):
         # layout.prop(context.scene.harnesstools, "color")
 
         row = layout.row()
-        row.prop(context.scene.harnesstools, "enabled", expand=True)
+        row.label(text="Local properties:")
+
+        row = layout.row()
+        # row.operator("object.set_cable_diameter")
+        row.prop(context.active_object.data, "minimum_curve_radius")
+
+        row = layout.row()
+        row.label(text="Global properties:")
+
+        row = layout.row()
+        row.prop(context.window_manager, "harnesstoolsenabled", expand=True)
 
         row = layout.row()
         row.operator("object.test_ot_selectcurves", text="Validate bend radii")
@@ -39,6 +49,5 @@ class Test_PT_Panel(bpy.types.Panel):
         row = layout.row()
         row.operator("object.set_cable_diameter")
         row.prop(context.scene.harnesstools, "cable_diameter", text="")
-
         
 
