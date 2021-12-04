@@ -32,6 +32,9 @@ class Test_PT_Panel(bpy.types.Panel):
         row.prop(context.active_object.data, "minimum_curve_radius")
 
         row = layout.row()
+        row.prop(context.active_object.data, "cable_diameter")
+
+        row = layout.row()
         row.label(text="Global properties:")
 
         row = layout.row()
@@ -46,8 +49,8 @@ class Test_PT_Panel(bpy.types.Panel):
         row = layout.row()
         row.prop(context.scene.harnesstools, "line_width")
 
-        row = layout.row()
-        row.operator("object.set_cable_diameter")
-        row.prop(context.scene.harnesstools, "cable_diameter", text="")
+        # row = layout.row()
+        # row.operator("object.set_cable_diameter")
+        # row.prop(context.scene.harnesstools, "cable_diameter", text="")
         
 

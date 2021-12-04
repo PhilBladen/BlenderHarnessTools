@@ -22,6 +22,7 @@ bl_info = {
     "category" : "Generic"
 }
 
+from typing import List
 import bpy
 from bpy.utils import (
         register_class,
@@ -87,15 +88,6 @@ class HarnessPropertyGroup(PropertyGroup):
         max = 10,
         subtype="PIXEL"
     )
-    cable_diameter: FloatProperty(
-        name = "Diameter",
-        # default = 0.002,
-        soft_min = 0.1,
-        # soft_max = 0.01,
-        # step=0.0001,
-        # unit="LENGTH",
-        subtype="DISTANCE_CAMERA"
-    )
 
     # def on_load(self):
     #     print("ONLOAD")
@@ -108,6 +100,19 @@ classes = (
     HarnessPropertyGroup
     )
 
+def update_cable_diameter(self, context):
+    active_object = context.active_object
+    assert active_object.type == "CURVE"
+    curve = active_object.data
+    assert isinstance(curve, bpy.types.Curve)
+    
+    curve.bevel_depth = curve.cable_diameter / 2000 # units mm
+    splines: List[bpy.types.Spline] = curve.splines
+    for spline in splines:
+        bezier_points: List[bpy.types.BezierSplinePoint] = spline.bezier_points
+        for point in bezier_points:
+            point.radius = 1
+
 def register():
     for c in classes:
         register_class(c)
@@ -119,6 +124,17 @@ def register():
         default = 0.01,
         min = 0,
         unit="LENGTH"
+    )
+
+    bpy.types.Curve.cable_diameter = FloatProperty(
+        name = "Diameter",
+        # default = 0.002,
+        soft_min = 0.1,
+        # soft_max = 0.01,
+        # step=0.0001,
+        # unit="LENGTH",
+        subtype="DISTANCE_CAMERA",
+        update=update_cable_diameter
     )
 
     bpy.types.WindowManager.harnesstoolsenabled = EnumProperty(
