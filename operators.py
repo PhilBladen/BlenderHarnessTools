@@ -1,6 +1,7 @@
-from typing import (List)
+from typing import (ClassVar, List)
 import bpy
 import bgl
+from bpy.types import (Operator)
 from mathutils.geometry import interpolate_bezier
 from mathutils import Vector
 from gpu.shader import from_builtin
@@ -64,6 +65,34 @@ class Test_OT_Operator(bpy.types.Operator):
         bpy.ops.view3d.snap_cursor_to_center()
         return {'FINISHED'}
 
+class MakeCable(Operator):
+    bl_idname = "object.make_cable"
+    bl_label = "Make cable"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context: bpy.context, event):
+        curve: bpy.types.Curve = context.active_object.data
+        curve.is_cable = True
+
+        mean_radius = 0
+        total_points = 0
+        splines: List[bpy.types.Spline] = curve.splines
+        for spline in splines:
+            bezier_points: List[bpy.types.BezierSplinePoint] = spline.bezier_points
+            for point in bezier_points:
+                mean_radius += point.radius
+                total_points += 1
+                point.radius = 1
+        mean_radius /= total_points
+
+        curve.cable_diameter = curve.bevel_depth * 2000 * mean_radius
+
+        d: bpy.types.Driver = curve.driver_add("bevel_depth").driver
+        d.use_self = True
+        d.expression = "self['cable_diameter'] / 2000"
+
+        return {"FINISHED"}
+
 class SetCableDiameter(bpy.types.Operator):
     bl_idname = "object.set_cable_diameter"
     bl_label = "Set Diameter"
@@ -90,6 +119,8 @@ class SetCableDiameter(bpy.types.Operator):
 class ValidateCableBendRadii:#(bpy.types.Operator):
     bl_idname = "object.test_ot_selectcurves"
     bl_label = "Test_OT_SelectCurves"
+
+    # test_prop = FloatProperty("test prop", default=25)
 
     draw_handlers = []
 
@@ -153,9 +184,11 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
             if not obj.visible_get():
                 continue
             if obj.type == "CURVE":# and isinstance(obj.data, bpy.types.Curve):
+                if not obj.data.is_cable:
+                    continue
                 curves.append(obj)
-            if obj.type == "MESH":
-                meshes.append(obj)
+            # if obj.type == "MESH":
+                # meshes.append(obj)
 
         vertices = []
 

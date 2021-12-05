@@ -1,4 +1,5 @@
 import bpy
+from . operators import ValidateCableBendRadii
 
 class Test_PT_Panel(bpy.types.Panel):
     bl_idname = "Test_PT_Panel"
@@ -27,12 +28,20 @@ class Test_PT_Panel(bpy.types.Panel):
         row = layout.row()
         row.label(text="Local properties:")
 
-        row = layout.row()
-        # row.operator("object.set_cable_diameter")
-        row.prop(context.active_object.data, "minimum_curve_radius")
+        if hasattr(context.active_object.data, "is_cable") and context.active_object.data.is_cable:
+            row = layout.row()
+            row.prop(context.active_object.data, "cable_diameter")
 
-        row = layout.row()
-        row.prop(context.active_object.data, "cable_diameter")
+            row = layout.row()
+            # row.operator("object.set_cable_diameter")
+            row.prop(context.active_object.data, "minimum_curve_radius")
+        else:
+            row = layout.row()
+            row.operator("object.make_cable")
+
+        # row = layout.row()
+        # row.prop(ValidateCableBendRadii, "test_prop", text="He")
+
 
         row = layout.row()
         row.label(text="Global properties:")

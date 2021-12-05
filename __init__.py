@@ -24,6 +24,7 @@ bl_info = {
 
 from typing import List
 import bpy
+from bpy.app.handlers import persistent
 from bpy.utils import (
         register_class,
         unregister_class
@@ -32,7 +33,9 @@ from bpy.types import (
         Operator,
         Panel,
         PropertyGroup,
-        Scene
+        Scene,
+        WindowManager,
+        Curve
         )
 from bpy.props import (
         BoolProperty,
@@ -48,7 +51,8 @@ from bpy.props import (
 from . operators import (
     Test_OT_Operator,
     SetCableDiameter,
-    ValidateCableBendRadii
+    ValidateCableBendRadii,
+    MakeCable
 )
 from . test_panel import Test_PT_Panel
 
@@ -97,7 +101,8 @@ classes = (
     Test_PT_Panel,
     #ValidateCableBendRadii,
     SetCableDiameter,
-    HarnessPropertyGroup
+    HarnessPropertyGroup,
+    MakeCable
     )
 
 def update_cable_diameter(self, context):
@@ -113,21 +118,37 @@ def update_cable_diameter(self, context):
         for point in bezier_points:
             point.radius = 1
 
+# if hasattr(bpy.context.window_manager, "harnesstoolsenabled"):
+    # bpy.context.window_manager.harnesstoolsenabled = "DI"
+
+# @persistent
+# def load_post_handler(dummy):
+    # print("Event: load_post", bpy.data.filepath)
+    # bpy.context.window_manager.harnesstoolsenabled = "EN"
+    # check_enabled(dummy, bpy.context)
+
 def register():
     for c in classes:
         register_class(c)
+
+    # bpy.app.handlers.load_post.append(load_post_handler)
+
     Scene.harnesstools = PointerProperty(type=HarnessPropertyGroup)
     # bpy.context.scene.harnesstools.property_unset("enabled")
 
-    bpy.types.Curve.minimum_curve_radius = FloatProperty(
+    Curve.is_cable = BoolProperty(
+        default=False
+    )
+
+    Curve.minimum_curve_radius = FloatProperty(
         name = "Min. bend radius",
         default = 0.01,
         min = 0,
         unit="LENGTH"
     )
 
-    bpy.types.Curve.cable_diameter = FloatProperty(
-        name = "Diameter",
+    Curve.cable_diameter = FloatProperty(
+        name = "Wire diameter",
         # default = 0.002,
         soft_min = 0.1,
         # soft_max = 0.01,
@@ -137,23 +158,28 @@ def register():
         update=update_cable_diameter
     )
 
-    bpy.types.WindowManager.harnesstoolsenabled = EnumProperty(
+    WindowManager.harnesstoolsenabled = EnumProperty(
         name="Curvature check",
         description="Automatic cable minimum bend radius validation",
-        items=[ ('EN', "Enabled", ""),
-                ('DI', "Disabled", "")],
+        items=[ ('DI', "Disabled", ""),
+                ('EN', "Enabled", "")],
         # default="DI",
         options={"SKIP_SAVE"},
         update=check_enabled,
         # get=get_enabled,
         # set=setter,
     )
+    # WindowManager.harnesstoolsenabled = "DI"
 
     # bpy.types.WindowManager.harnesstoolsenabled = None
 
 def unregister():
+    bpy.context.window_manager.harnesstoolsenabled = "DI"
+    del WindowManager.harnesstoolsenabled
+    del bpy.types.Scene.harnesstools
+    
+    # bpy.app.handlers.load_post.remove(load_post_handler)
+
     ValidateCableBendRadii.unregsiter_handlers()
     for c in classes:
         unregister_class(c)
-    del bpy.types.WindowManager.harnesstoolsenabled
-    del bpy.types.Scene.harnesstools
