@@ -74,6 +74,8 @@ class MakeCable(Operator):
         curve: bpy.types.Curve = context.active_object.data
         curve.is_cable = True
 
+        context.active_object.lock_scale = [True, True, True]
+
         mean_radius = 0
         total_points = 0
         splines: List[bpy.types.Spline] = curve.splines
@@ -243,6 +245,7 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
         #print("Completed {0} calculations for {2} segments in {1}ms (avg {3})".format(num_calculations, calc_time, num_curve_segments, self.average_calc_time))
         self.shader = from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
+        # self.batch2 = batch_for_shader(self.shader, "POINTS", {"pos": vertices})
 
     # # TODO temporary
     # @classmethod
@@ -254,8 +257,10 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
     def draw_callback(self, op, context):
         self.prepare_batch()
         bgl.glLineWidth(context.scene.harnesstools.line_width)
+        bgl.glPointSize(context.scene.harnesstools.line_width)
         self.shader.bind()
         c: FloatVectorProperty = context.scene.harnesstools.color
         # c[1] = 0
         self.shader.uniform_float("color", c)
         self.batch.draw(self.shader)
+        # self.batch2.draw(self.shader)
