@@ -16,7 +16,7 @@ bl_info = {
     "author" : "Phil Bladen",
     "description" : "Adds functionality for managing cables, including cable diameter and minimum bend radius.",
     "blender" : (2, 80, 0),
-    "version" : (0, 0, 1),
+    "version" : (0, 1, 0),
     "location" : "Properties > Data > Harness Tools",
     "warning" : "Alpha WIP - likely to contain bugs",
     "category" : "Generic"
