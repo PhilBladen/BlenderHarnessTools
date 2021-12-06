@@ -4,7 +4,7 @@ Harness Tools is a Blender addon for creating and managing cables in designs. It
 ![](docs/MinCurvatureDemo.gif)
 
 # Installation
- - Download the *.zip* file from the [latest release](releases/latest).
+ - Download the *.zip* file from the [latest release](https://github.com/PhilBladen/BlenderHarnessTools/releases/latest).
  - From Blender, go to *Preferences > Add-ons*, click the *Install...* button and select the downloaded *.zip* file.
 
 # How To Use
