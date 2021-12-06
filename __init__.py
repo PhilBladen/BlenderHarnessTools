@@ -54,7 +54,7 @@ from . operators import (
     ValidateCableBendRadii,
     MakeCable
 )
-from . test_panel import Test_PT_Panel
+from . control_panel import HARNESS_PT_Panel
 
 v = ValidateCableBendRadii()
 
@@ -96,15 +96,6 @@ class HarnessPropertyGroup(PropertyGroup):
     # def on_load(self):
     #     print("ONLOAD")
 
-classes = (
-    Test_OT_Operator,
-    Test_PT_Panel,
-    #ValidateCableBendRadii,
-    SetCableDiameter,
-    HarnessPropertyGroup,
-    MakeCable
-    )
-
 def update_cable_diameter(self, context):
     active_object = context.active_object
     assert active_object.type == "CURVE"
@@ -126,6 +117,15 @@ def update_cable_diameter(self, context):
     # print("Event: load_post", bpy.data.filepath)
     # bpy.context.window_manager.harnesstoolsenabled = "EN"
     # check_enabled(dummy, bpy.context)
+
+classes = (
+    Test_OT_Operator,
+    HARNESS_PT_Panel,
+    #ValidateCableBendRadii,
+    SetCableDiameter,
+    HarnessPropertyGroup,
+    MakeCable
+    )
 
 def register():
     for c in classes:

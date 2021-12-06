@@ -70,10 +70,14 @@ class MakeCable(Operator):
     bl_label = "Make cable"
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context: bpy.context):
+        return context.object.mode == "OBJECT"
+
     def invoke(self, context: bpy.context, event):
         curve: bpy.types.Curve = context.active_object.data
-        curve.is_cable = True
 
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True, properties=True)
         context.active_object.lock_scale = [True, True, True]
 
         mean_radius = 0
@@ -92,6 +96,8 @@ class MakeCable(Operator):
         d: bpy.types.Driver = curve.driver_add("bevel_depth").driver
         d.use_self = True
         d.expression = "self['cable_diameter'] / 2000"
+        
+        curve.is_cable = True
 
         return {"FINISHED"}
 

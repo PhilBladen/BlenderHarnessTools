@@ -1,7 +1,7 @@
 import bpy
 from . operators import ValidateCableBendRadii
 
-class Test_PT_Panel(bpy.types.Panel):
+class HARNESS_PT_Panel(bpy.types.Panel):
     bl_idname = "Test_PT_Panel"
     bl_label = "Harness Tools"
     bl_category = "STAR-XL"
