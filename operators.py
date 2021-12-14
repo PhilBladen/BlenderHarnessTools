@@ -1,7 +1,7 @@
 from typing import (ClassVar, List)
 import bpy
 import bgl
-from bpy.types import (Operator)
+from bpy_types import (Operator)
 from mathutils.geometry import interpolate_bezier
 from mathutils import Vector
 from gpu.shader import from_builtin
@@ -152,7 +152,7 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
         # self.draw_event = context.window_manager.event_timer_add(0.1, window=context.window) # TODO hmm
         self.draw_handlers.append(bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW"))
 
-        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+        # bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
     
     @classmethod
     def unregsiter_handlers(cls):

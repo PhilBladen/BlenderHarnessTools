@@ -15,7 +15,7 @@ bl_info = {
     "name" : "Harness Tools",
     "author" : "Phil Bladen",
     "description" : "Adds functionality for managing cables, including cable diameter and minimum bend radius.",
-    "blender" : (2, 80, 0),
+    "blender" : (3, 0, 0),
     "version" : (0, 1, 0),
     "location" : "Properties > Data > Harness Tools",
     "warning" : "Alpha WIP - likely to contain bugs",
@@ -23,7 +23,6 @@ bl_info = {
 }
 
 from typing import List
-import bpy
 from bpy.app.handlers import persistent
 from bpy.utils import (
         register_class,
@@ -67,16 +66,6 @@ def check_enabled(self, context):
         v.unregsiter_handlers()
 
 class HarnessPropertyGroup(PropertyGroup):
-    # def get_enabled(self):
-    #     # if not hasattr(self, "boo"):
-    #         # self.boo = "random"
-    #         # return 1
-    #     return self["enabled"]
-
-    # def setter(self, value):
-    #     self["enabled"] = value
-
-
     color: FloatVectorProperty(
         name="Line colour",
         default=(1.0, 0.0, 0.0, 1),
@@ -93,9 +82,6 @@ class HarnessPropertyGroup(PropertyGroup):
         subtype="PIXEL"
     )
 
-    # def on_load(self):
-    #     print("ONLOAD")
-
 def update_cable_diameter(self, context):
     active_object = context.active_object
     assert active_object.type == "CURVE"
@@ -109,19 +95,9 @@ def update_cable_diameter(self, context):
         for point in bezier_points:
             point.radius = 1
 
-# if hasattr(bpy.context.window_manager, "harnesstoolsenabled"):
-    # bpy.context.window_manager.harnesstoolsenabled = "DI"
-
-# @persistent
-# def load_post_handler(dummy):
-    # print("Event: load_post", bpy.data.filepath)
-    # bpy.context.window_manager.harnesstoolsenabled = "EN"
-    # check_enabled(dummy, bpy.context)
-
 classes = (
     Test_OT_Operator,
     HARNESS_PT_Panel,
-    #ValidateCableBendRadii,
     SetCableDiameter,
     HarnessPropertyGroup,
     MakeCable
@@ -131,10 +107,7 @@ def register():
     for c in classes:
         register_class(c)
 
-    # bpy.app.handlers.load_post.append(load_post_handler)
-
     Scene.harnesstools = PointerProperty(type=HarnessPropertyGroup)
-    # bpy.context.scene.harnesstools.property_unset("enabled")
 
     Curve.is_cable = BoolProperty(
         default=False
@@ -149,11 +122,7 @@ def register():
 
     Curve.cable_diameter = FloatProperty(
         name = "Wire diameter",
-        # default = 0.002,
         soft_min = 0.1,
-        # soft_max = 0.01,
-        # step=0.0001,
-        # unit="LENGTH",
         subtype="DISTANCE_CAMERA",
         update=update_cable_diameter
     )
@@ -163,22 +132,14 @@ def register():
         description="Automatic cable minimum bend radius validation",
         items=[ ('DI', "Disabled", ""),
                 ('EN', "Enabled", "")],
-        # default="DI",
         options={"SKIP_SAVE"},
         update=check_enabled,
-        # get=get_enabled,
-        # set=setter,
     )
-    # WindowManager.harnesstoolsenabled = "DI"
-
-    # bpy.types.WindowManager.harnesstoolsenabled = None
 
 def unregister():
     bpy.context.window_manager.harnesstoolsenabled = "DI"
     del WindowManager.harnesstoolsenabled
     del bpy.types.Scene.harnesstools
-    
-    # bpy.app.handlers.load_post.remove(load_post_handler)
 
     ValidateCableBendRadii.unregsiter_handlers()
     for c in classes:
