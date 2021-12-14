@@ -16,25 +16,26 @@ bl_info = {
     "author" : "Phil Bladen",
     "description" : "Adds functionality for managing cables, including cable diameter and minimum bend radius.",
     "blender" : (3, 0, 0),
-    "version" : (0, 1, 0),
+    "version" : (0, 1, 1),
     "location" : "Properties > Data > Harness Tools",
     "warning" : "Alpha WIP - likely to contain bugs",
     "category" : "Generic"
 }
 
 from typing import List
-from bpy.app.handlers import persistent
+
+import bpy
 from bpy.utils import (
         register_class,
         unregister_class
         )
 from bpy.types import (
-        Operator,
-        Panel,
         PropertyGroup,
         Scene,
         WindowManager,
-        Curve
+        Curve,
+        BezierSplinePoint,
+        Spline,
         )
 from bpy.props import (
         BoolProperty,
@@ -86,12 +87,12 @@ def update_cable_diameter(self, context):
     active_object = context.active_object
     assert active_object.type == "CURVE"
     curve = active_object.data
-    assert isinstance(curve, bpy.types.Curve)
+    assert isinstance(curve, Curve)
     
     curve.bevel_depth = curve.cable_diameter / 2000 # units mm
-    splines: List[bpy.types.Spline] = curve.splines
+    splines: List[Spline] = curve.splines
     for spline in splines:
-        bezier_points: List[bpy.types.BezierSplinePoint] = spline.bezier_points
+        bezier_points: List[BezierSplinePoint] = spline.bezier_points
         for point in bezier_points:
             point.radius = 1
 
@@ -139,7 +140,7 @@ def register():
 def unregister():
     bpy.context.window_manager.harnesstoolsenabled = "DI"
     del WindowManager.harnesstoolsenabled
-    del bpy.types.Scene.harnesstools
+    del Scene.harnesstools
 
     ValidateCableBendRadii.unregsiter_handlers()
     for c in classes:

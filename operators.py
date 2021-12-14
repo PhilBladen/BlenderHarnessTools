@@ -148,11 +148,9 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
         return {"RUNNING_MODAL"}
     
     def register_handlers(self, args, context):
-        # self.draw_handle = bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW")
-        # self.draw_event = context.window_manager.event_timer_add(0.1, window=context.window) # TODO hmm
         self.draw_handlers.append(bpy.types.SpaceView3D.draw_handler_add(self.draw_callback, args, "WINDOW", "POST_VIEW"))
 
-        # bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+        # bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1) # Force screen redraw
     
     @classmethod
     def unregsiter_handlers(cls):
@@ -166,18 +164,7 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
         
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
-    def modal(self, context, event):
-        # if context.area:
-        # bpy.types.SpaceView3D.context.area.tag_redraw()
-        # bpy.data.scenes[0].update_tag()#update()
-        # bpy.types.Scene.tag
-        
-        # bpy.context.view_layer.update()
-        # bpy.context.view_layer.depsgraph.tag
-        # print("Did update")
-        
-        # print("Event: {0}".format(event))
-        
+    def modal(self, context, event):        
         if event.type in {"ESC"}:
             self.unregsiter_handlers()
             return {"CANCELLED"}
@@ -187,7 +174,6 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
     def prepare_batch(self):
         objects: List[bpy.types.Object] = bpy.context.scene.objects
         curves: List[bpy.types.Object] = []
-        meshes = []
         for obj in objects:
             if not obj.visible_get():
                 continue
@@ -195,8 +181,6 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
                 if not obj.data.is_cable:
                     continue
                 curves.append(obj)
-            # if obj.type == "MESH":
-                # meshes.append(obj)
 
         vertices = []
 
@@ -211,15 +195,11 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
                 numSegments = len(curve_element.bezier_points)
 
                 r = curve_element.resolution_u
-                # if spline.use_cyclic_u:
-                    # numSegments += 1
-                    # print("Added one")
 
                 seg_range = numSegments - 1
                 if curve_element.use_cyclic_u:
                     seg_range += 1
 
-                points = []
                 for index in range(seg_range):
                     next_index = (index + 1) % numSegments
 
@@ -252,13 +232,6 @@ class ValidateCableBendRadii:#(bpy.types.Operator):
         self.shader = from_builtin("3D_UNIFORM_COLOR")
         self.batch = batch_for_shader(self.shader, "LINES", {"pos": vertices})
         # self.batch2 = batch_for_shader(self.shader, "POINTS", {"pos": vertices})
-
-    # # TODO temporary
-    # @classmethod
-    # def poll(cls, context: bpy.context):
-    #     return (context.active_object is not None and
-    #             context.active_object.select_get() and
-    #             context.active_object.type == 'CURVE')
     
     def draw_callback(self, op, context):
         self.prepare_batch()
